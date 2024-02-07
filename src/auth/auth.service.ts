@@ -7,7 +7,7 @@ import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthCredentialsDto } from './dto/auth-credentials.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcrypt'; // Importing bcrypt for password hashing
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from './jwt-payload.interface';
 
@@ -15,63 +15,61 @@ import { JwtPayload } from './jwt-payload.interface';
 export class AuthService {
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>,
-    private jwtService: JwtService,
+    private userRepository: Repository<User>, // Injecting the User repository
+    private jwtService: JwtService, // Injecting the JWT service
   ) {}
 
-  // Sign up a new user with the provided credentials
+  // Method for user registration
   async signUp(authCredentialsDto: AuthCredentialsDto): Promise<void> {
     const { username, password } = authCredentialsDto;
 
-    // Generate a salt for password hashing
+    // Generating a salt for password hashing
     const salt = await bcrypt.genSalt();
 
-    // Create a new User instance
+    // Creating a new user entity
     const user = new User();
     user.username = username;
     user.salt = salt;
 
-    // Hash the provided password and set it for the user
+    // Hashing the password before storing
     user.password = await this.hashPassword(password, salt);
 
     try {
-      // Save the user to the database
+      // Saving the user entity to the database
       await user.save();
     } catch (error) {
-      // Handle unique constraint violation (duplicate username)
+      // Handling unique constraint violation error
       if (error.code === '23505') {
         throw new ConflictException('Username already exists');
       } else {
-        // Handle other database errors
-        throw new InternalServerErrorException();
+        throw new InternalServerErrorException(); // Throwing internal server error for other errors
       }
     }
   }
 
-  // Sign in a user with the provided credentials and generate an access token
+  // Method for user authentication
   async signIn(
     authCredentialsDto: AuthCredentialsDto,
   ): Promise<{ accessToken: string }> {
     const { username, password } = authCredentialsDto;
 
-    // Find the user based on the provided username
+    // Finding the user by username in the database
     const user = await this.userRepository.findOne({ where: { username } });
 
-    // Validate the user's password
+    // Validating the password
     if (user && user.validatePassword(password)) {
-      // Create a JWT payload with the username
+      // Generating JWT token payload
       const payload: JwtPayload = { username };
-
-      // Sign the JWT payload to generate an access token
+      // Signing the JWT token
       const accessToken = await this.jwtService.sign(payload);
-
-      // Return the access token
-      return { accessToken };
+      return { accessToken }; // Returning the access token
     } else {
-      // Return null if the user is not found or password is incorrect
-      return null;
+      return null; // Return null if user not found or password is invalid
     }
   }
 
-  // Hash the provided password using the given salt
-  private
+  // Method for hashing the password
+  private async hashPassword(password: string, salt: string): Promise<string> {
+    return bcrypt.hash(password, salt);
+  }
+}
